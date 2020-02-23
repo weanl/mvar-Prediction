@@ -4,23 +4,27 @@ import tensorflow as tf
 from keras import Model, Sequential
 from keras.layers import InputLayer
 
+import numpy as np
+
 
 # override keras.layers.Layer
 class ARLayer(Layer):
     """
     only support for one-step forecast model
     """
-    def __init__(self, units=1, **kwargs):
+    def __init__(self, p, units=1, **kwargs):
         if units != 1:
             raise ValueError('Auto-Regression only '
                              'support one-step forecast model')
+        self.p = p
         self.units = units
         super(ARLayer, self).__init__(**kwargs)
+        self.build()
         
-    def build(self, input_dim):
+    def build(self, input_shape=None):  # build shape depends on initialization
         self.horizon_weights = self.add_weight(
             name='horizon-weights',
-            shape=(input_dim[-1], self.units),
+            shape=(self.p, self.units),
             initializer='uniform',
             trainable=True
         )
@@ -30,7 +34,7 @@ class ARLayer(Layer):
             initializer='uniform',
             trainable=True
         )
-        super(ARLayer, self).build(input_dim)
+        super(ARLayer, self).build(input_shape)
 
     def call(self, input):
         return tf.matmul(
@@ -40,27 +44,48 @@ class ARLayer(Layer):
         ) + self.horizon_bias
 
 
-# override keras.layers.Layer
+# override keras.Model
 class AR(Model):
     """
 
     """
-    def __init__(self, input_shape):
+    def __init__(self, p):
         super(AR, self).__init__(name='AR-model')
         self.ar_layer = ARLayer(
             name='ar-layer',
-            units=1,
-            input_shape=input_shape
+            p=p,
+            units=1
         )
 
+    # define forward process
     def call(self, inputs, mask=None):
         outputs = self.ar_layer(inputs)
         return outputs
+
+    def predict(self, x,
+                batch_size=None,
+                verbose=0,
+                steps=None):
+        """
+        do some preprocess like noise-smoothing
+        """
+        return super(AR, self).predict(x)
+
+
+def AR_test():
+    model = AR(p=32)
+    model.compile(optimizer='sgd', loss='mse')
+    X = np.ones(shape=(4,32))  # (num_instance, window)
+    y = np.ones(shape=(4,))
+    model.fit(X, y, epochs=100)
+    model.summary()
+    y_pred = model.predict(X)
+    print(y_pred)
 
 
 if __name__ == '__main__':
     # model = Sequential()
     # model.add(ARLayer(units=1, input_shape=(32,)))
     # model.summary()
-    model = AR(input_shape=(32,))
+    AR_test()
     pass
